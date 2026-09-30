@@ -25,12 +25,18 @@ npm install
 npm run dev                      # http://localhost:5173, /api → :8000
 ```
 
+## Frontend (tela de ajuste)
+- **Esquerda:** URL/upload → análise automática → player com a janela 9:16 do bloco ativo sobreposta → **RENDERIZAR VÍDEO FINAL** (`POST /api/render` com o JSON editado).
+- **Direita:** timeline. Clique no cabeçalho do bloco para ir ao trecho; clique numa palavra para corrigir (Enter confirma, Esc cancela); `✂ Cortar` / `↺ Manter` alterna o tipo; slider/campo ajusta o `crop_center_x`.
+- "Pular blocos cut no preview" simula o resultado final durante a reprodução.
+
 ## API
 | Método | Rota | Corpo | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | — | Status + se o FFmpeg foi encontrado |
 | POST | `/api/ingest/upload` | multipart `file` | Salva em `backend/temp/<id>.<ext>` |
 | POST | `/api/ingest/download` | `{"url": "..."}` | yt-dlp, máx. 1080p, salva em `backend/temp/` |
+| GET | `/api/media/{video_id}` | — | Serve o vídeo original para o player (suporta Range/seek) |
 | POST | `/api/process` | `{"video_id": "...", "language": "pt"}` | Gera e retorna o `video_data.json` (salvo em `backend/temp/<id>.video_data.json`) |
 
 `language` é opcional (sem ele, o Whisper detecta o idioma). O modelo vem da variável `WHISPER_MODEL` (padrão `base`); os demais parâmetros de análise ficam em `backend/config.py`.

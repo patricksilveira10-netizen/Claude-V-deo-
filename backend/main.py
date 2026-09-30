@@ -3,8 +3,9 @@ import uuid
 from pathlib import Path
 
 import yt_dlp
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Path as PathParam, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, HttpUrl
 
 from config import ALLOWED_EXTENSIONS, MAX_HEIGHT, TEMP_DIR, UPLOAD_CHUNK_SIZE
@@ -118,6 +119,12 @@ def _resolve_video(video_id: str) -> Path:
         if p.suffix.lower() in ALLOWED_EXTENSIONS:
             return p
     raise HTTPException(404, f"Vídeo '{video_id}' não encontrado em temp/.")
+
+
+@app.get("/api/media/{video_id}")
+def media(video_id: str = PathParam(pattern=r"^[0-9a-f]{12}$")) -> FileResponse:
+    """Serve o vídeo original para o player (FileResponse suporta Range/seek)."""
+    return FileResponse(_resolve_video(video_id))
 
 
 @app.post("/api/process", response_model=VideoData)
