@@ -25,9 +25,12 @@ npm install
 npm run dev                      # http://localhost:5173, /api → :8000
 ```
 
-## API (Fase 1)
+## API
 | Método | Rota | Corpo | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | — | Status + se o FFmpeg foi encontrado |
 | POST | `/api/ingest/upload` | multipart `file` | Salva em `backend/temp/<id>.<ext>` |
 | POST | `/api/ingest/download` | `{"url": "..."}` | yt-dlp, máx. 1080p, salva em `backend/temp/` |
+| POST | `/api/process` | `{"video_id": "...", "language": "pt"}` | Gera e retorna o `video_data.json` (salvo em `backend/temp/<id>.video_data.json`) |
+
+`language` é opcional (sem ele, o Whisper detecta o idioma). O modelo vem da variável `WHISPER_MODEL` (padrão `base`); os demais parâmetros de análise ficam em `backend/config.py`.

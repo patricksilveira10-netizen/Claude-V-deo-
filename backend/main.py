@@ -5,9 +5,11 @@ from pathlib import Path
 import yt_dlp
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 from config import ALLOWED_EXTENSIONS, MAX_HEIGHT, TEMP_DIR, UPLOAD_CHUNK_SIZE
+from processor import ProcessingError, VideoProcessor
+from schemas import VideoData
 
 app = FastAPI(title="Shorts Engine", version="0.1.0")
 
@@ -22,6 +24,11 @@ class IngestResult(BaseModel):
 
 class DownloadRequest(BaseModel):
     url: HttpUrl
+
+
+class ProcessRequest(BaseModel):
+    video_id: str = Field(pattern=r"^[0-9a-f]{12}$")
+    language: str | None = Field(default=None, description="Código ISO (ex.: 'pt'). Vazio = autodetecção.")
 
 
 def _new_id() -> str:
@@ -104,3 +111,20 @@ async def ingest_download(req: DownloadRequest) -> IngestResult:
     return IngestResult(
         video_id=video_id, filename=path.name, path=str(path), size_bytes=path.stat().st_size, source=str(req.url)
     )
+
+
+def _resolve_video(video_id: str) -> Path:
+    for p in TEMP_DIR.glob(f"{video_id}.*"):
+        if p.suffix.lower() in ALLOWED_EXTENSIONS:
+            return p
+    raise HTTPException(404, f"Vídeo '{video_id}' não encontrado em temp/.")
+
+
+@app.post("/api/process", response_model=VideoData)
+async def process(req: ProcessRequest) -> VideoData:
+    video = _resolve_video(req.video_id)
+    processor = VideoProcessor(video, language=req.language)
+    try:
+        return await run_in_threadpool(processor.run)
+    except ProcessingError as e:
+        raise HTTPException(422, str(e)) from e
