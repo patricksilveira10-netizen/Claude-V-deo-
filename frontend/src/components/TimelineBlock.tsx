@@ -69,8 +69,9 @@ export function TimelineBlock({ clip, active, cropRange, onSeek, onToggle, onWor
             {clip.transcript.length === 0 && <span className="text-sm italic text-neutral-600">(sem fala)</span>}
             {clip.transcript.map((w, i) => (
               <EditableWord
-                // start garante unicidade; o texto remonta o componente se editado por fora
-                key={`${w.start}-${w.word}`}
+                // Posição, não start/texto: o Whisper pode emitir a mesma palavra duas vezes no mesmo instante
+                // (chave duplicada faz o React duplicar/omitir itens). A lista só é editada no lugar, nunca reordenada.
+                key={i}
                 word={w}
                 onChange={(text) => onWordChange(i, text)}
               />

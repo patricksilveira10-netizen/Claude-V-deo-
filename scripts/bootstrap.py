@@ -80,7 +80,8 @@ def install_hint(tool: str) -> str:
 # ── checagens ─────────────────────────────────────────────────────────────
 def check_tools() -> str:
     if sys.version_info < MIN_PY:
-        fail(f"Python {platform.python_version()} é antigo; precisa de 3.10+ (recomendado 3.11/3.12).\n"
+        version = ".".join(str(n) for n in sys.version_info[:3])
+        fail(f"Python {version} é antigo; precisa de 3.10+ (recomendado 3.11/3.12).\n"
              f"  Instale: {install_hint('python')}")  # fmt: skip
 
     missing = [t for t in ("ffmpeg", "ffprobe") if not shutil.which(t)]

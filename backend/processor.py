@@ -1,6 +1,7 @@
 """Etapa de análise: vídeo original -> video_data.json (nenhum vídeo é renderizado aqui)."""
 
 import json
+import os
 import statistics
 import subprocess
 import threading
@@ -40,10 +41,15 @@ def _get_whisper(name: str):
     if name not in _models:
         t0 = time.monotonic()
         _whisper_status.update(state="loading", model=name, error=None)
-        print(f"[whisper] carregando modelo '{name}' (1ª execução: download para ~/.cache/whisper)…", flush=True)
+        print(f"[whisper] carregando modelo '{name}'…", flush=True)
         try:
             import whisper  # import tardio: torch é pesado e só é necessário aqui
 
+            url = whisper._MODELS.get(name)
+            if url:  # modelo oficial: load_model baixa para ~/.cache/whisper se ainda não estiver lá
+                cache = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "whisper" / Path(url).name
+                if not cache.exists():
+                    print(f"[whisper] 1ª vez: baixando '{name}' para {cache.parent} (só acontece uma vez)…", flush=True)
             _models[name] = whisper.load_model(name)
         except Exception as e:
             _whisper_status.update(state="error", error=str(e))
