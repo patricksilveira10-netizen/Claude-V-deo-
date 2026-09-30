@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // IP explícito: Node 17+ pode resolver "localhost" para ::1 (IPv6), e a API escuta só em 127.0.0.1.
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         // Uploads/downloads longos: sem timeout no proxy.
         timeout: 0,

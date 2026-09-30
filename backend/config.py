@@ -33,3 +33,7 @@ SUB_PRIMARY = "&H0000FFFF"  # ASS é &HAABBGGRR -> amarelo
 SUB_OUTLINE = 9
 SUB_SHADOW = 4
 SUB_MARGIN_V = 560  # px a partir da base (1920): texto no terço inferior, fora do rosto e da UI do app
+
+# Operação contínua
+TEMP_RETENTION_HOURS = float(os.getenv("TEMP_RETENTION_HOURS", "24"))  # jobs inativos há mais tempo são apagados; <=0 desliga
+WHISPER_PRELOAD = os.getenv("WHISPER_PRELOAD", "1") != "0"  # carrega/baixa o modelo ao iniciar a API

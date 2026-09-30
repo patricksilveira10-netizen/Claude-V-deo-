@@ -4,6 +4,7 @@ import json
 import statistics
 import subprocess
 import threading
+import time
 import uuid
 import wave
 from dataclasses import dataclass
@@ -27,14 +28,40 @@ SAMPLE_RATE = 16_000  # taxa nativa do Whisper
 
 _models: dict = {}
 _whisper_lock = threading.Lock()  # carregamento e inferência serializados
+_whisper_status = {"state": "idle", "model": WHISPER_MODEL, "error": None, "load_seconds": None}
+
+
+def whisper_status() -> dict:
+    return dict(_whisper_status)
 
 
 def _get_whisper(name: str):
+    """Chamar com _whisper_lock. Na 1ª vez baixa o checkpoint (~140 MB no 'base') para ~/.cache/whisper."""
     if name not in _models:
-        import whisper  # import tardio: torch é pesado e só é necessário aqui
+        t0 = time.monotonic()
+        _whisper_status.update(state="loading", model=name, error=None)
+        print(f"[whisper] carregando modelo '{name}' (1ª execução: download para ~/.cache/whisper)…", flush=True)
+        try:
+            import whisper  # import tardio: torch é pesado e só é necessário aqui
 
-        _models[name] = whisper.load_model(name)
+            _models[name] = whisper.load_model(name)
+        except Exception as e:
+            _whisper_status.update(state="error", error=str(e))
+            print(f"[whisper] falha ao carregar '{name}': {e}", flush=True)
+            raise
+        secs = round(time.monotonic() - t0, 1)
+        _whisper_status.update(state="ready", load_seconds=secs)
+        print(f"[whisper] modelo '{name}' pronto ({secs}s)", flush=True)
     return _models[name]
+
+
+def preload_whisper(name: str = WHISPER_MODEL) -> None:
+    """Aquece o modelo em background ao subir a API (a 1ª análise não paga download + load)."""
+    try:
+        with _whisper_lock:
+            _get_whisper(name)
+    except Exception:
+        pass  # status "error" já registrado; a próxima análise tenta de novo
 
 
 def _r(t: float) -> float:

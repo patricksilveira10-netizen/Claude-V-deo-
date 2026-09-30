@@ -1,4 +1,4 @@
-import type { IngestResult, RenderResult, VideoData } from '../types'
+import type { Health, IngestResult, RenderResult, VideoData } from '../types'
 
 async function request<T>(url: string, init: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -36,3 +36,9 @@ export const processVideo = (videoId: string, language: string | null): Promise<
 export const renderVideo = (data: VideoData): Promise<RenderResult> => request('/api/render', json(data))
 
 export const mediaUrl = (videoId: string) => `/api/media/${videoId}`
+
+export async function getHealth(): Promise<Health> {
+  const res = await fetch('/api/health')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}

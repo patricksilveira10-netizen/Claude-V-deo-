@@ -1,0 +1,4 @@
+# Scripts de inicialização: cada um com o fim de linha que o seu interpretador exige, em qualquer SO.
+*.sh  text eol=lf
+*.bat text eol=crlf
+*.py  text eol=lf

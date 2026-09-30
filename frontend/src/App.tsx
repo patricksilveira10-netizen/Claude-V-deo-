@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ApiStatus } from './components/ApiStatus'
 import { IngestForm } from './components/IngestForm'
 import { Timeline } from './components/Timeline'
 import { VideoPreview } from './components/VideoPreview'
@@ -27,10 +28,16 @@ export default function App() {
   const [skipCuts, setSkipCuts] = useState(true)
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const resultRef = useRef<HTMLDivElement>(null)
   // Última versão de cada bloco no tipo oposto: alternar keep→cut→keep não perde transcrição nem crop.
   const stash = useRef(new Map<number, Clip>())
 
   const busy = stage === 'ingesting' || stage === 'processing' || stage === 'rendering'
+
+  // Render concluído: leva o vídeo final para a tela (fica abaixo do botão, fora da área visível).
+  useEffect(() => {
+    if (renderResult) resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [renderResult])
 
   async function analyze(id: string) {
     setStage('processing')
@@ -122,9 +129,12 @@ export default function App() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100 lg:grid lg:h-screen lg:grid-cols-2">
       {/* ── Coluna esquerda: inputs + preview ── */}
       <section className="flex flex-col gap-4 border-neutral-800 p-5 lg:overflow-y-auto lg:border-r">
-        <h1 className="text-lg font-bold tracking-tight">
-          Shorts Engine <span className="font-normal text-neutral-500">· ajuste</span>
-        </h1>
+        <header className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-lg font-bold tracking-tight">
+            Shorts Engine <span className="font-normal text-neutral-500">· ajuste</span>
+          </h1>
+          <ApiStatus />
+        </header>
 
         <IngestForm
           disabled={busy}
@@ -178,17 +188,21 @@ export default function App() {
           {stage === 'rendering' ? 'RENDERIZANDO…' : 'RENDERIZAR VÍDEO FINAL'}
         </button>
         {renderResult && (
-          <div className="space-y-3 rounded-lg border border-emerald-900 bg-neutral-900 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-mono text-xs text-neutral-400">
-                ✓ {renderResult.duration.toFixed(1)}s · {renderResult.clips} clipes · {(renderResult.size_bytes / 1_048_576).toFixed(1)} MB ·
-                render {renderResult.render_seconds.toFixed(1)}s
-              </p>
+          <div ref={resultRef} className="scroll-mt-4 space-y-3 rounded-lg border border-emerald-900 bg-neutral-900 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-emerald-400">✓ Vídeo final pronto</h2>
+                <p className="font-mono text-xs text-neutral-400">
+                  {renderResult.duration.toFixed(1)}s · {renderResult.clips} clipes · {(renderResult.size_bytes / 1_048_576).toFixed(1)} MB
+                  · render {renderResult.render_seconds.toFixed(1)}s
+                </p>
+              </div>
               <a
                 href={`${renderResult.url}&download=1`}
+                download="output_final_reels.mp4"
                 className="shrink-0 rounded-md bg-emerald-500 px-4 py-2 text-sm font-bold text-neutral-950 hover:bg-emerald-400"
               >
-                ⬇ Baixar MP4
+                ⬇ Baixar Vídeo Processado (.mp4)
               </a>
             </div>
             <video

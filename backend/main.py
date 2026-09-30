@@ -1,7 +1,9 @@
 import re
 import shutil
+import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePath
 
 import yt_dlp
@@ -10,12 +12,31 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, HttpUrl
 
-from config import ALLOWED_EXTENSIONS, MAX_HEIGHT, OUTPUT_FILENAME, RENDERS_DIR, TEMP_DIR, UPLOAD_CHUNK_SIZE
-from processor import ProcessingError, VideoProcessor
+from cleanup import active_job, purge_temp
+from config import (
+    ALLOWED_EXTENSIONS,
+    MAX_HEIGHT,
+    OUTPUT_FILENAME,
+    RENDERS_DIR,
+    TEMP_DIR,
+    UPLOAD_CHUNK_SIZE,
+    WHISPER_PRELOAD,
+)
+from processor import ProcessingError, VideoProcessor, preload_whisper, whisper_status
 from renderer import RenderError, VideoRenderer
 from schemas import VideoData
 
-app = FastAPI(title="Shorts Engine", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Sobras de sessões anteriores (render abortado, API derrubada no meio de uma análise) + jobs expirados.
+    await run_in_threadpool(purge_temp)
+    if WHISPER_PRELOAD:
+        threading.Thread(target=preload_whisper, name="whisper-preload", daemon=True).start()
+    yield
+
+
+app = FastAPI(title="Shorts Engine", version="0.1.0", lifespan=lifespan)
 
 VIDEO_ID_PATTERN = r"^[0-9a-f]{12}$"
 
@@ -43,7 +64,11 @@ def _new_id() -> str:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "ffmpeg": shutil.which("ffmpeg") is not None}
+    return {
+        "ok": True,
+        "ffmpeg": shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None,
+        "whisper": whisper_status(),
+    }
 
 
 @app.post("/api/ingest/upload", response_model=IngestResult)
@@ -57,7 +82,7 @@ async def ingest_upload(file: UploadFile = File(...)) -> IngestResult:
     size = 0
     try:
         # Streaming em chunks: não carrega o vídeo inteiro em memória.
-        with dest.open("wb") as out:
+        with active_job(video_id), dest.open("wb") as out:
             while chunk := await file.read(UPLOAD_CHUNK_SIZE):
                 out.write(chunk)
                 size += len(chunk)
@@ -90,6 +115,9 @@ def _download(url: str, video_id: str) -> Path:
         "quiet": True,
         "no_warnings": True,
         "restrictfilenames": True,
+        # Por padrão o yt-dlp grava a data de publicação como mtime: um vídeo antigo pareceria expirado
+        # para a limpeza (cleanup.py) logo após o download.
+        "updatetime": False,
     }
     if has_ffmpeg:
         opts["merge_output_format"] = "mp4"
@@ -105,7 +133,8 @@ def _download(url: str, video_id: str) -> Path:
 async def ingest_download(req: DownloadRequest) -> IngestResult:
     video_id = _new_id()
     try:
-        path = await run_in_threadpool(_download, str(req.url), video_id)
+        with active_job(video_id):
+            path = await run_in_threadpool(_download, str(req.url), video_id)
     except yt_dlp.utils.DownloadError as e:
         for leftover in TEMP_DIR.glob(f"{video_id}.*"):
             leftover.unlink(missing_ok=True)
@@ -123,7 +152,9 @@ def _resolve_video(video_id: str) -> Path:
     for p in TEMP_DIR.glob(f"{video_id}.*"):
         if p.suffix.lower() in ALLOWED_EXTENSIONS:
             return p
-    raise HTTPException(404, f"Vídeo '{video_id}' não encontrado em temp/.")
+    raise HTTPException(
+        404, f"Vídeo '{video_id}' não encontrado em temp/ (a limpeza automática remove jobs inativos; reenvie o vídeo)."
+    )
 
 
 @app.get("/api/media/{video_id}")
@@ -134,12 +165,13 @@ def media(video_id: str = PathParam(pattern=VIDEO_ID_PATTERN)) -> FileResponse:
 
 @app.post("/api/process", response_model=VideoData)
 async def process(req: ProcessRequest) -> VideoData:
-    video = _resolve_video(req.video_id)
-    processor = VideoProcessor(video, language=req.language)
-    try:
-        return await run_in_threadpool(processor.run)
-    except ProcessingError as e:
-        raise HTTPException(422, str(e)) from e
+    with active_job(req.video_id):
+        video = _resolve_video(req.video_id)
+        processor = VideoProcessor(video, language=req.language)
+        try:
+            return await run_in_threadpool(processor.run)
+        except ProcessingError as e:
+            raise HTTPException(422, str(e)) from e
 
 
 class RenderResult(BaseModel):
@@ -157,13 +189,15 @@ async def render(data: VideoData) -> RenderResult:
     video_id = PurePath(data.video_path).stem
     if not re.fullmatch(VIDEO_ID_PATTERN, video_id):
         raise HTTPException(422, f"video_path inválido: '{data.video_path}'.")
-    video = _resolve_video(video_id)
-
-    renderer = VideoRenderer(data, video, video_id)
-    try:
-        result = await run_in_threadpool(renderer.run)
-    except RenderError as e:
-        raise HTTPException(422, str(e)) from e
+    with active_job(video_id):
+        video = _resolve_video(video_id)
+        renderer = VideoRenderer(data, video, video_id)
+        try:
+            result = await run_in_threadpool(renderer.run)
+        except RenderError as e:
+            raise HTTPException(422, str(e)) from e
+    # Render concluído: apaga intermediários (deste e de outros jobs) e jobs expirados.
+    await run_in_threadpool(purge_temp)
     return RenderResult(
         video_id=video_id,
         # ?v= muda a cada render: o navegador não reaproveita o MP4 anterior do cache.

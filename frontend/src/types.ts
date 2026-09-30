@@ -53,3 +53,14 @@ export interface RenderResult {
   size_bytes: number
   render_seconds: number
 }
+
+export interface Health {
+  ok: boolean
+  ffmpeg: boolean
+  whisper: {
+    state: 'idle' | 'loading' | 'ready' | 'error'
+    model: string
+    error: string | null
+    load_seconds: number | null
+  }
+}

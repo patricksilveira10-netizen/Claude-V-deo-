@@ -280,7 +280,6 @@ class VideoRenderer:
     def _write_subtitles(self, segments: list[Segment]) -> None:
         ass = build_ass(segments, self.fps)
         (self.work_dir / "legenda_dinamica.ass").write_text(ass, encoding="utf-8")
-        (self.out_dir / "legenda_dinamica.ass").write_text(ass, encoding="utf-8")  # cópia para inspeção
         # Fontes copiadas para o work dir: fontsdir relativo evita escapar caminhos (C:\, :) no filtergraph.
         if FONTS_DIR.is_dir():
             shutil.copytree(FONTS_DIR, self.work_dir / "fonts", dirs_exist_ok=True)
@@ -305,5 +304,15 @@ class VideoRenderer:
         except RenderError:
             tmp_out.unlink(missing_ok=True)
             raise
-        tmp_out.replace(self.output_path)  # atômico: nunca expõe um MP4 pela metade
+        # atômico: nunca expõe um MP4 pela metade. No Windows o replace falha se o MP4 anterior ainda
+        # estiver aberto (player/download em curso): tenta por alguns segundos antes de desistir.
+        for attempt in range(10):
+            try:
+                tmp_out.replace(self.output_path)
+                return
+            except PermissionError as e:
+                if attempt == 9:
+                    tmp_out.unlink(missing_ok=True)
+                    raise RenderError("O MP4 anterior está em uso (feche o player/download e renderize de novo).") from e
+                time.sleep(0.5)
 
