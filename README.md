@@ -37,6 +37,20 @@ npm run dev                      # http://localhost:5173, /api → :8000
 | POST | `/api/ingest/upload` | multipart `file` | Salva em `backend/temp/<id>.<ext>` |
 | POST | `/api/ingest/download` | `{"url": "..."}` | yt-dlp, máx. 1080p, salva em `backend/temp/` |
 | GET | `/api/media/{video_id}` | — | Serve o vídeo original para o player (suporta Range/seek) |
+| POST | `/api/render` | `video_data.json` editado | Renderiza o MP4 9:16 final e retorna `url` para download |
+| GET | `/api/render/{video_id}/output_final_reels.mp4` | `?download=1` | Serve o MP4 final (inline ou como anexo) |
 | POST | `/api/process` | `{"video_id": "...", "language": "pt"}` | Gera e retorna o `video_data.json` (salvo em `backend/temp/<id>.video_data.json`) |
 
 `language` é opcional (sem ele, o Whisper detecta o idioma). O modelo vem da variável `WHISPER_MODEL` (padrão `base`); os demais parâmetros de análise ficam em `backend/config.py`.
+
+## Renderização (`backend/renderer.py`)
+Dois passes, desenhados para **não dessincronizar áudio e vídeo**:
+1. Cada bloco `keep` vira um intermediário `.mov` (H.264 CRF 12 + PCM) com exatamente N frames e N/fps segundos de áudio, com limites encaixados na grade de frames (fps racional exato, VFR → CFR).
+2. Concat demuxer + legenda `.ass` (uma palavra por vez, Montserrat Black embutida em `assets/fonts`) + encode final único (H.264 CRF 20 + AAC 192k, 1080x1920, `+faststart`).
+
+Saída: `backend/temp/renders/<video_id>/output_final_reels.mp4` (+ `legenda_dinamica.ass`). Estilo da legenda e zoom em `backend/config.py`.
+
+Teste de regressão de sincronia (flash + bipe em cada emenda, 29.97fps, com/sem áudio, com zoom):
+```bash
+cd backend && .venv/bin/python tests/check_render_sync.py
+```

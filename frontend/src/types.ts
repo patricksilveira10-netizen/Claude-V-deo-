@@ -18,6 +18,7 @@ export interface KeepClip {
   end_time: number
   crop_center_x: number
   transcript: Word[]
+  zoom_in?: boolean
 }
 
 export interface CutClip {
@@ -42,4 +43,13 @@ export interface IngestResult {
   path: string
   size_bytes: number
   source: string
+}
+
+export interface RenderResult {
+  video_id: string
+  url: string
+  duration: number
+  clips: number
+  size_bytes: number
+  render_seconds: number
 }

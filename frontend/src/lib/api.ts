@@ -1,4 +1,4 @@
-import type { IngestResult, VideoData } from '../types'
+import type { IngestResult, RenderResult, VideoData } from '../types'
 
 async function request<T>(url: string, init: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -33,6 +33,6 @@ export const downloadVideo = (url: string): Promise<IngestResult> => request('/a
 export const processVideo = (videoId: string, language: string | null): Promise<VideoData> =>
   request('/api/process', json({ video_id: videoId, language }))
 
-export const renderVideo = (data: VideoData): Promise<unknown> => request('/api/render', json(data))
+export const renderVideo = (data: VideoData): Promise<RenderResult> => request('/api/render', json(data))
 
 export const mediaUrl = (videoId: string) => `/api/media/${videoId}`

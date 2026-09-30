@@ -11,9 +11,10 @@ interface Props {
   onToggle: () => void
   onWordChange: (index: number, text: string) => void
   onCropChange: (x: number) => void
+  onZoomToggle: () => void
 }
 
-export function TimelineBlock({ clip, active, cropRange, onSeek, onToggle, onWordChange, onCropChange }: Props) {
+export function TimelineBlock({ clip, active, cropRange, onSeek, onToggle, onWordChange, onCropChange, onZoomToggle }: Props) {
   const keep = clip.type === 'keep'
   const duration = clip.end_time - clip.start_time
 
@@ -39,6 +40,18 @@ export function TimelineBlock({ clip, active, cropRange, onSeek, onToggle, onWor
           <span className="font-mono text-xs text-neutral-600">{fmt(duration)}s</span>
           {!keep && <span className="text-xs text-neutral-600">{clip.reason}</span>}
         </button>
+        {keep && (
+          <button
+            type="button"
+            onClick={onZoomToggle}
+            title="Zoom-in leve (1.0x → 1.1x) ao longo do bloco"
+            className={`rounded-md px-3 py-1 text-xs font-semibold ${
+              clip.zoom_in ? 'bg-sky-500 text-neutral-950 hover:bg-sky-400' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+            }`}
+          >
+            🔍 Zoom
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggle}

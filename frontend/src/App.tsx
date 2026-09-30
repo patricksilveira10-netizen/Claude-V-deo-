@@ -4,7 +4,7 @@ import { Timeline } from './components/Timeline'
 import { VideoPreview } from './components/VideoPreview'
 import { downloadVideo, mediaUrl, processVideo, renderVideo, uploadVideo } from './lib/api'
 import { nearestCrop } from './lib/timeline'
-import type { Clip, IngestResult, VideoData } from './types'
+import type { Clip, IngestResult, RenderResult, VideoData } from './types'
 
 type Stage = 'idle' | 'ingesting' | 'processing' | 'ready' | 'rendering'
 
@@ -25,7 +25,7 @@ export default function App() {
   const [data, setData] = useState<VideoData | null>(null)
   const [activeClipId, setActiveClipId] = useState<number | null>(null)
   const [skipCuts, setSkipCuts] = useState(true)
-  const [renderResult, setRenderResult] = useState<unknown>(null)
+  const [renderResult, setRenderResult] = useState<RenderResult | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   // Última versão de cada bloco no tipo oposto: alternar keep→cut→keep não perde transcrição nem crop.
   const stash = useRef(new Map<number, Clip>())
@@ -90,6 +90,10 @@ export default function App() {
 
   function setCrop(index: number, x: number) {
     updateClip(index, (c) => (c.type === 'keep' ? { ...c, crop_center_x: x } : c))
+  }
+
+  function toggleZoom(index: number) {
+    updateClip(index, (c) => (c.type === 'keep' ? { ...c, zoom_in: !c.zoom_in } : c))
   }
 
   function seek(t: number) {
@@ -173,10 +177,27 @@ export default function App() {
         >
           {stage === 'rendering' ? 'RENDERIZANDO…' : 'RENDERIZAR VÍDEO FINAL'}
         </button>
-        {renderResult !== null && (
-          <pre className="overflow-x-auto rounded-md bg-neutral-900 p-3 font-mono text-xs text-emerald-300">
-            {JSON.stringify(renderResult, null, 2)}
-          </pre>
+        {renderResult && (
+          <div className="space-y-3 rounded-lg border border-emerald-900 bg-neutral-900 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono text-xs text-neutral-400">
+                ✓ {renderResult.duration.toFixed(1)}s · {renderResult.clips} clipes · {(renderResult.size_bytes / 1_048_576).toFixed(1)} MB ·
+                render {renderResult.render_seconds.toFixed(1)}s
+              </p>
+              <a
+                href={`${renderResult.url}&download=1`}
+                className="shrink-0 rounded-md bg-emerald-500 px-4 py-2 text-sm font-bold text-neutral-950 hover:bg-emerald-400"
+              >
+                ⬇ Baixar MP4
+              </a>
+            </div>
+            <video
+              src={renderResult.url}
+              controls
+              className="mx-auto max-h-[70vh] rounded-md bg-black"
+              style={{ aspectRatio: '9 / 16' }}
+            />
+          </div>
         )}
       </section>
 
@@ -191,6 +212,7 @@ export default function App() {
             onToggle={toggleClip}
             onWordChange={editWord}
             onCropChange={setCrop}
+            onZoomToggle={toggleZoom}
             onReset={() => {
               stash.current.clear()
               setData(original)

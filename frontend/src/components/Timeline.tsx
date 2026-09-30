@@ -10,10 +10,11 @@ interface Props {
   onToggle: (index: number) => void
   onWordChange: (index: number, wordIndex: number, text: string) => void
   onCropChange: (index: number, x: number) => void
+  onZoomToggle: (index: number) => void
   onReset: () => void
 }
 
-export function Timeline({ data, activeClipId, dirty, onSeek, onToggle, onWordChange, onCropChange, onReset }: Props) {
+export function Timeline({ data, activeClipId, dirty, onSeek, onToggle, onWordChange, onCropChange, onZoomToggle, onReset }: Props) {
   const { total, kept, keeps, cuts } = summary(data.timeline)
   const cropRange = cropWidth(data.metadata) < data.metadata.width ? cropBounds(data.metadata) : null
   const saved = total > 0 ? Math.round((1 - kept / total) * 100) : 0
@@ -54,6 +55,7 @@ export function Timeline({ data, activeClipId, dirty, onSeek, onToggle, onWordCh
             onToggle={() => onToggle(i)}
             onWordChange={(w, text) => onWordChange(i, w, text)}
             onCropChange={(x) => onCropChange(i, x)}
+            onZoomToggle={() => onZoomToggle(i)}
           />
         ))}
       </ol>

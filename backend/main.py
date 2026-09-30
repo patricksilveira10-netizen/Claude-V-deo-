@@ -1,6 +1,8 @@
+import re
 import shutil
+import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import yt_dlp
 from fastapi import FastAPI, File, HTTPException, Path as PathParam, UploadFile
@@ -8,11 +10,14 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, HttpUrl
 
-from config import ALLOWED_EXTENSIONS, MAX_HEIGHT, TEMP_DIR, UPLOAD_CHUNK_SIZE
+from config import ALLOWED_EXTENSIONS, MAX_HEIGHT, OUTPUT_FILENAME, RENDERS_DIR, TEMP_DIR, UPLOAD_CHUNK_SIZE
 from processor import ProcessingError, VideoProcessor
+from renderer import RenderError, VideoRenderer
 from schemas import VideoData
 
 app = FastAPI(title="Shorts Engine", version="0.1.0")
+
+VIDEO_ID_PATTERN = r"^[0-9a-f]{12}$"
 
 
 class IngestResult(BaseModel):
@@ -28,7 +33,7 @@ class DownloadRequest(BaseModel):
 
 
 class ProcessRequest(BaseModel):
-    video_id: str = Field(pattern=r"^[0-9a-f]{12}$")
+    video_id: str = Field(pattern=VIDEO_ID_PATTERN)
     language: str | None = Field(default=None, description="Código ISO (ex.: 'pt'). Vazio = autodetecção.")
 
 
@@ -122,7 +127,7 @@ def _resolve_video(video_id: str) -> Path:
 
 
 @app.get("/api/media/{video_id}")
-def media(video_id: str = PathParam(pattern=r"^[0-9a-f]{12}$")) -> FileResponse:
+def media(video_id: str = PathParam(pattern=VIDEO_ID_PATTERN)) -> FileResponse:
     """Serve o vídeo original para o player (FileResponse suporta Range/seek)."""
     return FileResponse(_resolve_video(video_id))
 
@@ -135,3 +140,45 @@ async def process(req: ProcessRequest) -> VideoData:
         return await run_in_threadpool(processor.run)
     except ProcessingError as e:
         raise HTTPException(422, str(e)) from e
+
+
+class RenderResult(BaseModel):
+    video_id: str
+    url: str
+    duration: float
+    clips: int
+    size_bytes: int
+    render_seconds: float
+
+
+@app.post("/api/render", response_model=RenderResult)
+async def render(data: VideoData) -> RenderResult:
+    # video_path vem do cliente: só aceita um vídeo ingerido (temp/<id>.<ext>), nunca um caminho arbitrário.
+    video_id = PurePath(data.video_path).stem
+    if not re.fullmatch(VIDEO_ID_PATTERN, video_id):
+        raise HTTPException(422, f"video_path inválido: '{data.video_path}'.")
+    video = _resolve_video(video_id)
+
+    renderer = VideoRenderer(data, video, video_id)
+    try:
+        result = await run_in_threadpool(renderer.run)
+    except RenderError as e:
+        raise HTTPException(422, str(e)) from e
+    return RenderResult(
+        video_id=video_id,
+        # ?v= muda a cada render: o navegador não reaproveita o MP4 anterior do cache.
+        url=f"/api/render/{video_id}/{OUTPUT_FILENAME}?v={int(time.time() * 1000)}",
+        duration=result["duration"],
+        clips=result["clips"],
+        size_bytes=result["size_bytes"],
+        render_seconds=result["render_seconds"],
+    )
+
+
+@app.get("/api/render/{video_id}/" + OUTPUT_FILENAME)
+def download_render(video_id: str = PathParam(pattern=VIDEO_ID_PATTERN), download: bool = False) -> FileResponse:
+    path = RENDERS_DIR / video_id / OUTPUT_FILENAME
+    if not path.is_file():
+        raise HTTPException(404, "Render não encontrado.")
+    # ?download=1 força "Salvar como"; sem ele o navegador reproduz inline.
+    return FileResponse(path, media_type="video/mp4", filename=OUTPUT_FILENAME if download else None)

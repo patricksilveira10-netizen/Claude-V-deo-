@@ -26,6 +26,7 @@ class KeepClip(_Strict):
     end_time: float
     crop_center_x: int
     transcript: list[Word]
+    zoom_in: bool = False
 
 
 class CutClip(_Strict):
