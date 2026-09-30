@@ -1,6 +1,7 @@
 """Etapa de análise: vídeo original -> video_data.json (nenhum vídeo é renderizado aqui)."""
 
 import json
+import logging
 import os
 import statistics
 import subprocess
@@ -26,6 +27,7 @@ from config import (
 from schemas import CutClip, KeepClip, VideoData, VideoMetadata, Word
 
 SAMPLE_RATE = 16_000  # taxa nativa do Whisper
+log = logging.getLogger("uvicorn.error")  # mesmo formato/saída dos logs do uvicorn, uma linha por escrita
 
 _models: dict = {}
 _whisper_lock = threading.Lock()  # carregamento e inferência serializados
@@ -41,7 +43,7 @@ def _get_whisper(name: str):
     if name not in _models:
         t0 = time.monotonic()
         _whisper_status.update(state="loading", model=name, error=None)
-        print(f"[whisper] carregando modelo '{name}'…", flush=True)
+        log.info(f"[whisper] carregando modelo '{name}'…")
         try:
             import whisper  # import tardio: torch é pesado e só é necessário aqui
 
@@ -49,15 +51,15 @@ def _get_whisper(name: str):
             if url:  # modelo oficial: load_model baixa para ~/.cache/whisper se ainda não estiver lá
                 cache = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "whisper" / Path(url).name
                 if not cache.exists():
-                    print(f"[whisper] 1ª vez: baixando '{name}' para {cache.parent} (só acontece uma vez)…", flush=True)
+                    log.info(f"[whisper] 1ª vez: baixando '{name}' para {cache.parent} (só acontece uma vez)…")
             _models[name] = whisper.load_model(name)
         except Exception as e:
             _whisper_status.update(state="error", error=str(e))
-            print(f"[whisper] falha ao carregar '{name}': {e}", flush=True)
+            log.error(f"[whisper] falha ao carregar '{name}': {e}")
             raise
         secs = round(time.monotonic() - t0, 1)
         _whisper_status.update(state="ready", load_seconds=secs)
-        print(f"[whisper] modelo '{name}' pronto ({secs}s)", flush=True)
+        log.info(f"[whisper] modelo '{name}' pronto ({secs}s)")
     return _models[name]
 
 

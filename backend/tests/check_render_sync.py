@@ -141,7 +141,7 @@ def main() -> int:
             ok &= len(flashes) == len(expected) and (not with_audio or len(beeps) == len(expected))
             print("  OK" if ok else "  FALHOU")
             failures += not ok
-            ass_lines = (rnd.out_dir / "legenda_dinamica.ass").read_text().count("Dialogue:")
+            ass_lines = R.build_ass(segs, rnd.fps).count("Dialogue:")  # o .ass é intermediário (apagado após o render)
             print(f"  legenda: {ass_lines} palavras")
     return failures
 

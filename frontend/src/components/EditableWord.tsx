@@ -31,7 +31,7 @@ export function EditableWord({ word, onChange }: Props) {
             setEditing(false)
           }
         }}
-        className="rounded bg-neutral-950 px-1 text-sm text-emerald-300 outline-none ring-1 ring-emerald-500"
+        className="max-w-full rounded bg-neutral-950 px-1 text-sm text-emerald-300 outline-none ring-1 ring-emerald-500"
       />
     )
   }
@@ -45,7 +45,7 @@ export function EditableWord({ word, onChange }: Props) {
         setDraft(word.word)
         setEditing(true)
       }}
-      className="rounded px-1 text-sm text-neutral-200 hover:bg-neutral-700"
+      className="max-w-full rounded px-1 text-left text-sm break-all text-neutral-200 hover:bg-neutral-700"
     >
       {word.word}
     </button>

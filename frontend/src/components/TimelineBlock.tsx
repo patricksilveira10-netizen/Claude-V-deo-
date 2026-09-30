@@ -65,7 +65,7 @@ export function TimelineBlock({ clip, active, cropRange, onSeek, onToggle, onWor
 
       {keep && (
         <div className="mt-3 space-y-3">
-          <p className="flex flex-wrap gap-x-0.5 gap-y-1 leading-relaxed">
+          <p className="flex min-w-0 flex-wrap gap-x-0.5 gap-y-1 leading-relaxed">
             {clip.transcript.length === 0 && <span className="text-sm italic text-neutral-600">(sem fala)</span>}
             {clip.transcript.map((w, i) => (
               <EditableWord

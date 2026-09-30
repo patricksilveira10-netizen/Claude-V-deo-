@@ -9,6 +9,7 @@ Todo o resto com o prefixo do job é intermediário (WAV do Whisper, clipes de r
 atividade. Jobs em andamento (active_job) nunca são tocados.
 """
 
+import logging
 import re
 import shutil
 import threading
@@ -21,6 +22,8 @@ import config
 
 _JOB_FILE = re.compile(r"^([0-9a-f]{12})\.")
 _JOB_DIR = re.compile(r"^[0-9a-f]{12}$")
+
+log = logging.getLogger("uvicorn.error")
 
 _active: dict[str, int] = {}
 _active_lock = threading.Lock()
@@ -95,7 +98,7 @@ def _remove(p: Path) -> int:
     except FileNotFoundError:
         return 0
     except OSError as e:
-        print(f"[cleanup] não foi possível apagar {p.name}: {e}", flush=True)
+        log.warning(f"[cleanup] não foi possível apagar {p.name}: {e}")
         return 0
 
 
@@ -127,5 +130,5 @@ def purge_temp(retention_hours: float | None = None, now: float | None = None) -
         msg = f"[cleanup] {removed} item(ns) removido(s), {size} liberados"
         if expired_jobs:
             msg += f"; jobs expirados (> {retention_hours:g}h): {', '.join(expired_jobs)}"
-        print(msg, flush=True)
+        log.info(msg)
     return {"removed": removed, "freed_bytes": freed, "expired_jobs": expired_jobs}
